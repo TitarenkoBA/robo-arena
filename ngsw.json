@@ -1,0 +1,91 @@
+{
+  "configVersion": 1,
+  "timestamp": 1792510391502,
+  "index": "./index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "./chunk-7F2NDJJE.js",
+        "./chunk-P6RNNU6G.js",
+        "./chunk-QAWGSBOA.js",
+        "./chunk-SHA4LFXM.js",
+        "./chunk-SXUXLQIT.js",
+        "./chunk-YKQ5B5JB.js",
+        "./index.html",
+        "./main-EV3EYPJJ.js",
+        "./manifest.webmanifest",
+        "./styles-N4PAXG3P.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "assets",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "./assets/sounds/error-in-the-computer.mp3",
+        "./assets/sounds/mixkit-arcade-game-jump-coin-216.wav",
+        "./assets/sounds/mixkit-mouse-click-close-1113.wav",
+        "./assets/sounds/mixkit-typewriter-soft-click-1125.wav",
+        "./assets/sounds/notification-sound.mp3",
+        "./favicon.ico",
+        "./icons/icon-192.png",
+        "./icons/icon-512.png",
+        "./icons/icon-maskable-512.png",
+        "./icons/icon.svg"
+      ],
+      "patterns": []
+    }
+  ],
+  "dataGroups": [],
+  "hashTable": {
+    "./assets/sounds/error-in-the-computer.mp3": "a7fd0a0faee3065733bc6db805ae21e212755deb",
+    "./assets/sounds/mixkit-arcade-game-jump-coin-216.wav": "8d1ef16f7dce8ecb9cf80824c18840a08e498309",
+    "./assets/sounds/mixkit-mouse-click-close-1113.wav": "cc9b680789260f547114a744fab86f9f91a6d8d2",
+    "./assets/sounds/mixkit-typewriter-soft-click-1125.wav": "ca7bde83a84649cef88569ff321112052421fb79",
+    "./assets/sounds/notification-sound.mp3": "e88a0da33804715955c93649cad176900c2a017a",
+    "./chunk-7F2NDJJE.js": "6818d67194b8a848f2d7c9d09b586e9fd794d147",
+    "./chunk-P6RNNU6G.js": "586c4c2fc2becad3c017b2e12a19f9af97a4969d",
+    "./chunk-QAWGSBOA.js": "1cd05567b09f2a95407a3f3776cb6a6abb73cced",
+    "./chunk-SHA4LFXM.js": "d974edc4b46e8f378289b9f8d66adf1dd92e5469",
+    "./chunk-SXUXLQIT.js": "3edd30418874d0d979aa8a9aa38994a829a29584",
+    "./chunk-YKQ5B5JB.js": "7cdbfeba70ac1e36560af9edf16358a6ce56ed6a",
+    "./favicon.ico": "9c39f434fe1261f68c5e3eefdf734630d99c5670",
+    "./icons/icon-192.png": "9dcc12d98eb3ad8389697856d76fdf7101a65337",
+    "./icons/icon-512.png": "0fe64bbbf12877c465790967629767041cd5ca69",
+    "./icons/icon-maskable-512.png": "fc815cd57bc4cc5a3fd57926888122c27b881422",
+    "./icons/icon.svg": "987135d28c4adc265f4770bfdc5dc8afef84e880",
+    "./index.html": "0d4dbce8f8ca19417a611901b182d942cebc57d0",
+    "./main-EV3EYPJJ.js": "cecff068e4cb4118ed6f61d425fb4d2a31f107c9",
+    "./manifest.webmanifest": "4a914525d8a83f8ee0b9b01da61c65c199f547f0",
+    "./styles-N4PAXG3P.css": "c0a1b5af634969f22cf99767c75d1095911ffedb"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}
