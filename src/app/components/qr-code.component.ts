@@ -14,12 +14,14 @@ import QRCode from 'qrcode';
 export class QrCodeComponent {
   readonly text = input.required<string>();
   readonly size = input(200);
+  /** Уровень коррекции: для длинных данных (офлайн-приглашения) лучше 'L' — модули крупнее. */
+  readonly ecl = input<'L' | 'M'>('M');
   protected readonly src = signal<string | null>(null);
 
   constructor() {
     effect(() => {
       const t = this.text();
-      QRCode.toDataURL(t, { margin: 1, width: 512, errorCorrectionLevel: 'M', color: { dark: '#141a2e', light: '#ffffff' } })
+      QRCode.toDataURL(t, { margin: 1, width: 768, errorCorrectionLevel: this.ecl(), color: { dark: '#000000', light: '#ffffff' } })
         .then((url) => this.src.set(url))
         .catch(() => this.src.set(null));
     });

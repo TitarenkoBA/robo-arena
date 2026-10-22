@@ -42,6 +42,8 @@ export class GameSessionService {
   /** Как запускать следующую игру. */
   readonly role = signal<Role>('offline');
   readonly roomCode = signal<string | null>(null);
+  /** Через что идёт сетевая игра: PeerJS-сервер или офлайн-обмен QR-кодами. */
+  readonly net = signal<'online' | 'lan'>('online');
 
   save() {
     this.profile = { name: this.name().trim().slice(0, 16) || randomName(), color: this.color(), settings: this.settings() };

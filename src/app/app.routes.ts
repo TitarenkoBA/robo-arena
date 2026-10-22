@@ -6,6 +6,7 @@ export const routes: Routes = [
   { path: 'host', loadComponent: () => import('./pages/host.component').then((m) => m.HostComponent) },
   { path: 'join', loadComponent: () => import('./pages/join.component').then((m) => m.JoinComponent) },
   { path: 'join/:code', loadComponent: () => import('./pages/join.component').then((m) => m.JoinComponent) },
+  { path: 'lan/:payload', loadComponent: () => import('./pages/lan-join.component').then((m) => m.LanJoinComponent) },
   { path: 'play', loadComponent: () => import('./pages/game.component').then((m) => m.GameComponent) },
   { path: '**', redirectTo: '' },
 ];

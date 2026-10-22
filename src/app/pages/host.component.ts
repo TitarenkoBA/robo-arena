@@ -1,7 +1,9 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { LanInviteComponent } from '../components/lan-invite.component';
 import { QrCodeComponent } from '../components/qr-code.component';
+import { LanService } from '../services/lan.service';
 import { MAPS } from '../game/maps';
 import { GameSettings } from '../game/types';
 import { AudioService } from '../services/audio.service';
@@ -12,15 +14,21 @@ import { SfxService } from '../services/sfx.service';
 
 @Component({
   selector: 'app-host',
-  imports: [FormsModule, QrCodeComponent],
+  imports: [FormsModule, QrCodeComponent, LanInviteComponent],
   template: `
     <main class="page">
       <div class="flex items-center gap-3">
         <button type="button" class="btn small" (click)="back()">← Назад</button>
-        <h2 class="text-xl font-extrabold">{{ online ? 'Новая комната' : 'Игра с ботами' }}</h2>
+        <h2 class="text-xl font-extrabold">{{ online ? 'Новая комната' : lan ? 'Игра без интернета' : 'Игра с ботами' }}</h2>
       </div>
 
-      <div [class]="online ? 'mt-4 grid gap-4 md:grid-cols-2' : 'mx-auto mt-4 grid w-full max-w-xl gap-4'">
+      <div [class]="online || lan ? 'mt-4 grid gap-4 md:grid-cols-2' : 'mx-auto mt-4 grid w-full max-w-xl gap-4'">
+        @if (lan) {
+          <section class="card">
+            <app-lan-invite />
+            <p class="mt-3 text-center text-xs text-white/50">Все устройства — в одной сети Wi-Fi или на точке доступа вашего телефона. Игроков можно добавлять и во время матча (меню ☰).</p>
+          </section>
+        }
         @if (online) {
           <section class="card flex flex-col items-center text-center">
             @if (code(); as c) {
@@ -108,7 +116,12 @@ export class HostComponent implements OnInit {
   protected readonly maps = MAPS;
   protected readonly skillNames = ['Новичок', 'Лёгкий', 'Средний', 'Сильный', 'Чемпион'];
   protected readonly s = this.session.settings;
-  protected readonly online = this.route.snapshot.queryParamMap.get('mode') !== 'offline';
+  private readonly mode = this.route.snapshot.queryParamMap.get('mode') ?? 'online';
+  /** Через сигнальный сервер PeerJS (нужен интернет на старте). */
+  protected readonly online = this.mode === 'online';
+  /** Без интернета: обмен QR-кодами, игра по локальной сети. */
+  protected readonly lan = this.mode === 'lan';
+  private readonly lanService = inject(LanService);
   protected readonly code = signal<string | null>(null);
   protected readonly error = signal('');
   protected readonly copied = signal(false);
@@ -162,6 +175,7 @@ export class HostComponent implements OnInit {
   back() {
     this.audio.play('click');
     if (this.online) this.peer.disconnect();
+    if (this.lan) this.lanService.disconnect(false);
     void this.router.navigate(['/']);
   }
 
@@ -169,7 +183,8 @@ export class HostComponent implements OnInit {
     this.sfx.unlock();
     this.audio.play('click');
     this.session.save();
-    this.session.role.set(this.online ? 'host' : 'offline');
+    this.session.role.set(this.online || this.lan ? 'host' : 'offline');
+    this.session.net.set(this.lan ? 'lan' : 'online');
     void this.pwa.enterGameMode();
     void this.router.navigate(['/play']);
   }

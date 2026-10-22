@@ -7,7 +7,7 @@ import { GameEvent, GameSettings, Input, Player, RosterEntry } from './types';
 import { WEAPONS } from './weapons';
 import { World } from './world';
 import { pick } from './math';
-import type { PeerJsService } from '../services/peerjs.service';
+import type { Transport } from '../services/transport';
 import type { SfxService } from '../services/sfx.service';
 
 export type Role = 'host' | 'client' | 'offline';
@@ -27,7 +27,8 @@ export interface EngineOptions {
   settings: GameSettings;
   name: string;
   color: string;
-  peer: PeerJsService;
+  /** Сеть: PeerJS (через интернет) или LanService (офлайн, QR-обмен). */
+  peer: Transport;
   sfx: SfxService;
   onUi: (s: UiState) => void;
   onMenu: () => void;
@@ -101,6 +102,8 @@ export class GameEngine {
     this.raf = requestAnimationFrame(this.frame);
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('resize', this.onResize);
+    // Вкладка может быть скрыта уже при старте — тогда хост сразу считает игру по таймеру.
+    if (document.hidden) this.onVisibility();
     this.pushUi(true);
   }
 
@@ -420,7 +423,7 @@ export class GameEngine {
     ctx.fillStyle = '#fff';
     ctx.font = `700 ${Math.round(cv.height / 20)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('Загрузка арены...', cv.width / 2, cv.height / 2);
+    ctx.fillText(this.role === 'client' ? 'Ждём, когда хост начнёт игру…' : 'Загрузка арены...', cv.width / 2, cv.height / 2);
   }
 
   private pushUi(force: boolean) {

@@ -1,6 +1,9 @@
 import { Injectable, NgZone, OnDestroy, inject, signal } from '@angular/core';
 import Peer, { DataConnection, PeerOptions } from 'peerjs';
 import { environment } from '../../environments/environment';
+import { MessageBuffer, PeerHandlers, Transport } from './transport';
+
+export type { PeerHandlers } from './transport';
 
 /** Опции PeerJS — как в проекте p2p (сигнальный сервер + STUN/TURN). */
 function buildPeerOptions(): PeerOptions {
@@ -36,21 +39,14 @@ interface Link {
   joined: boolean;
 }
 
-export interface PeerHandlers {
-  onJoin?: (peerId: string) => void;
-  onLeave?: (peerId: string) => void;
-  onMessage?: (peerId: string, msg: unknown) => void;
-  onStatus?: (status: string) => void;
-  onHostLost?: () => void;
-}
-
 @Injectable({ providedIn: 'root' })
-export class PeerJsService implements OnDestroy {
+export class PeerJsService implements OnDestroy, Transport {
   private readonly zone = inject(NgZone);
   private peer?: Peer;
   private links = new Map<string, Link>();
   private hostId = '';
   private handlers: PeerHandlers = {};
+  private readonly inbox = new MessageBuffer();
 
   readonly myPeerId = signal<string | null>(null);
   readonly role = signal<PeerRole>(null);
@@ -59,6 +55,7 @@ export class PeerJsService implements OnDestroy {
 
   setHandlers(h: PeerHandlers) {
     this.handlers = h;
+    this.inbox.setHandler(h.onMessage);
   }
 
   static randomRoomCode(): string {
@@ -177,7 +174,7 @@ export class PeerJsService implements OnDestroy {
         if (this.role() === 'host') this.handlers.onJoin?.(peerId);
       }
     });
-    conn.on('data', (data) => this.handlers.onMessage?.(peerId, data));
+    conn.on('data', (data) => this.inbox.push(peerId, data));
     conn.on('close', () => {
       if (conn !== link.r) return;
       this.links.delete(peerId);
@@ -221,6 +218,7 @@ export class PeerJsService implements OnDestroy {
       l.u?.close();
     }
     this.links.clear();
+    this.inbox.clear();
     this.peer?.destroy();
     this.peer = undefined;
     this.hostId = '';

@@ -1,7 +1,10 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, isDevMode, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { LanInviteComponent } from '../components/lan-invite.component';
 import { QrCodeComponent } from '../components/qr-code.component';
+import { LanService } from '../services/lan.service';
+import { Transport } from '../services/transport';
 import { GameEngine, UiState } from '../game/engine';
 import { AudioService } from '../services/audio.service';
 import { GameSessionService } from '../services/game-session.service';
@@ -11,7 +14,7 @@ import { SfxService } from '../services/sfx.service';
 
 @Component({
   selector: 'app-game',
-  imports: [FormsModule, QrCodeComponent],
+  imports: [FormsModule, QrCodeComponent, LanInviteComponent],
   host: { class: 'fixed inset-0 block overflow-hidden bg-[#141a2e] select-none' },
   styles: `
     canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
@@ -34,7 +37,18 @@ import { SfxService } from '../services/sfx.service';
             <button type="button" class="btn small" (click)="menu.set(false)">✕</button>
           </div>
 
-          @if (role === 'host' && code()) {
+          @if (role === 'host' && net === 'lan') {
+            <div class="mt-3 rounded-xl bg-black/20 p-2">
+              @if (inviteOpen()) {
+                <app-lan-invite [compact]="true" />
+                <button type="button" class="btn small mt-2 w-full" (click)="inviteOpen.set(false)">Скрыть приглашение</button>
+              } @else {
+                <button type="button" class="btn small w-full" (click)="inviteOpen.set(true)">📶 Пригласить игрока (без интернета) · в игре: {{ lan.peerCount() }}</button>
+              }
+            </div>
+          }
+
+          @if (role === 'host' && net === 'online' && code()) {
             <div class="mt-3 flex items-center gap-3">
               <app-qr-code [text]="invite()" [size]="110" />
               <div>
@@ -112,10 +126,16 @@ export class GameComponent implements AfterViewInit, OnDestroy {
   protected readonly ui = signal<UiState>({ phase: 'loading', roster: [], winner: '', myId: -1, connected: true, bots: 0 });
   protected readonly code = this.peer.myPeerId;
   protected readonly invite = computed(() => this.session.inviteUrl(this.code() ?? ''));
+  protected readonly lan = inject(LanService);
+  protected readonly net = this.session.net();
+  protected readonly inviteOpen = signal(false);
+  /** Сеть этой игры: PeerJS или офлайн-обмен QR. */
+  private readonly transport: Transport = this.net === 'lan' ? this.lan : this.peer;
 
   ngAfterViewInit() {
     // Перезагрузили страницу на /play без соединения — назад в меню.
-    if ((this.role === 'client' && this.peer.role() !== 'guest') || (this.role === 'host' && this.peer.role() !== 'host')) {
+    const tr = this.transport.role();
+    if ((this.role === 'client' && tr !== 'guest') || (this.role === 'host' && tr !== 'host')) {
       void this.router.navigate(['/']);
       return;
     }
@@ -125,13 +145,13 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       settings: this.session.settings(),
       name: this.session.name(),
       color: this.session.color(),
-      peer: this.peer,
+      peer: this.transport,
       sfx: this.sfx,
       onUi: (s) => this.ui.set(s),
       onMenu: () => this.toggleMenu(),
     });
     // Отладочный доступ к движку из консоли (только в dev-сборке).
-    if (isDevMode()) (window as unknown as { __robo: unknown }).__robo = this.engine;
+    if (isDevMode()) Object.assign(window, { __robo: this.engine, __lan: this.lan });
   }
 
   ngOnDestroy() {
@@ -159,7 +179,7 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     this.audio.play('click');
     this.engine?.destroy();
     this.engine = null;
-    this.peer.disconnect(false);
+    this.transport.disconnect(false);
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     void this.router.navigate(['/']);
   }

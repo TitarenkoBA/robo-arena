@@ -29,10 +29,11 @@ import { SfxService } from '../services/sfx.service';
         </div>
       </section>
 
-      <nav class="mt-4 grid gap-3 sm:grid-cols-3">
+      <nav class="mt-4 grid gap-3 sm:grid-cols-2">
         <button type="button" class="btn btn-primary big" (click)="go('/host', 'online')">🛰️ Создать комнату<small>друзья подключатся по QR-коду</small></button>
         <button type="button" class="btn btn-accent big" (click)="go('/join')">📷 Подключиться<small>сканировать QR или ввести код</small></button>
-        <button type="button" class="btn big" (click)="go('/host', 'offline')">🤖 С ботами<small>тренировка без интернета</small></button>
+        <button type="button" class="btn big" (click)="go('/host', 'lan')">📶 Без интернета<small>по Wi-Fi или точке доступа · обмен QR-кодами</small></button>
+        <button type="button" class="btn big" (click)="go('/host', 'offline')">🤖 С ботами<small>одиночная тренировка</small></button>
       </nav>
 
       <section class="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm">

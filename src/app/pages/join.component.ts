@@ -41,13 +41,14 @@ export function parseRoomCode(text: string): string {
           <section class="card">
             <h3 class="mb-3 font-bold">Или ввести код комнаты</h3>
             <form (ngSubmit)="join()" class="flex gap-2">
-              <input class="field font-mono uppercase tracking-widest" [(ngModel)]="code" name="code" placeholder="abc123" maxlength="40" autocapitalize="off" autocomplete="off" />
+              <input class="field font-mono tracking-widest" [(ngModel)]="code" name="code" placeholder="abc123" maxlength="4000" autocapitalize="off" autocomplete="off" />
               <button class="btn btn-primary" type="submit" [disabled]="!code.trim()">Войти</button>
             </form>
             @if (error()) {
               <p class="mt-3 text-sm text-orange-300">{{ error() }}</p>
             }
             <p class="mt-4 text-sm text-white/60">Код показан у создателя комнаты под QR-кодом. Можно также просто открыть присланную ссылку.</p>
+            <p class="mt-2 text-sm text-white/60">Игра без интернета: отсканируйте здесь QR-приглашение хоста — дальше подскажем, что делать.</p>
           </section>
         </div>
       }
@@ -75,11 +76,22 @@ export class JoinComponent implements OnInit {
   }
 
   onScan(text: string) {
+    if (this.openLanInvite(text)) return;
     this.code = parseRoomCode(text);
     void this.join();
   }
 
+  /** QR офлайн-режима (приглашение без интернета) ведёт на отдельный экран. */
+  private openLanInvite(text: string): boolean {
+    const m = /#\/lan\/([A-Za-z0-9_-]+)/.exec(text);
+    if (!m) return false;
+    this.sfx.unlock();
+    void this.router.navigate(['/lan', m[1]]);
+    return true;
+  }
+
   async join() {
+    if (this.openLanInvite(this.code)) return;
     const code = parseRoomCode(this.code);
     if (!code) return;
     this.sfx.unlock();
@@ -90,6 +102,7 @@ export class JoinComponent implements OnInit {
       this.audio.play('connected');
       this.session.roomCode.set(code);
       this.session.role.set('client');
+      this.session.net.set('online');
       void this.pwa.enterGameMode();
       void this.router.navigate(['/play']);
     } catch (e) {
