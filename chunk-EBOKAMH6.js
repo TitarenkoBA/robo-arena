@@ -1,0 +1,1 @@
+var o=class{queue=[];handler;setHandler(e){if(this.handler=e,!e)return;let n=this.queue;this.queue=[];for(let[s,t]of n)e(s,t)}push(e,n){this.handler?this.handler(e,n):this.queue.length<500&&this.queue.push([e,n])}clear(){this.queue=[]}};export{o as a};
