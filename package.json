@@ -1,6 +1,7 @@
 {
   "name": "p2p-game",
   "version": "1.0.0",
+  "author": "Boris Titarenko",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
