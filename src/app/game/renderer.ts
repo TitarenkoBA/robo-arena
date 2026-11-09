@@ -226,7 +226,8 @@ export class Renderer {
     // Масштаб: примерно 1280×720 мировых пикселей на экране.
     const wantZoom = me && me.alive ? WEAPONS[me.weapon]?.zoom ?? 1 : 1;
     this.zoom += (wantZoom - this.zoom) * Math.min(1, dt * 4);
-    const base = Math.min(this.w / 1280, this.h / 720);
+    // Вертикальный экран (телефон без поворота) — масштаб по ширине, иначе роботы крошечные.
+    const base = this.w < this.h ? Math.min(this.w / 760, this.h / 1100) : Math.min(this.w / 1280, this.h / 720);
     // На телефонах приближаем камеру, чтобы роботы не были крошечными.
     const phone = this.w < 700 || this.h < 500;
     this.scale = Math.max(0.42, phone ? base * 1.35 : base) / this.zoom;
@@ -240,8 +241,10 @@ export class Renderer {
       if (me.alive) {
         const look = this.input.touchMode ? 140 : 220;
         if (this.input.touchMode) {
-          tx += Math.cos(me.aim) * look * 0.6;
-          ty += Math.sin(me.aim) * look * 0.4;
+          // Пальцы лежат в нижних углах, поэтому держим робота над ними: чуть выше
+          // центра и почти по центру по горизонтали (сдвиг к прицелу ограничен).
+          tx += Math.cos(me.aim) * Math.min(look * 0.6, (this.w * 0.08) / this.scale);
+          ty += Math.sin(me.aim) * look * 0.2 + (this.h * 0.12) / this.scale;
         } else {
           tx += clamp((this.input.mouseX - this.w / 2) / this.scale, -look * 2, look * 2) * 0.3;
           ty += clamp((this.input.mouseY - this.h / 2) / this.scale, -look * 2, look * 2) * 0.3;
@@ -250,8 +253,14 @@ export class Renderer {
     }
     const halfW = this.w / 2 / this.scale;
     const halfH = this.h / 2 / this.scale;
-    tx = v.map.pxW < halfW * 2 ? v.map.pxW / 2 : clamp(tx, halfW, v.map.pxW - halfW);
-    ty = v.map.pxH < halfH * 2 ? v.map.pxH / 2 : clamp(ty, halfH, v.map.pxH - halfH + (v.def.openBottom ? 200 : 0));
+    // На телефоне камере можно немного выезжать за края карты: иначе у стены
+    // робот оказывается у края экрана — прямо под большим пальцем.
+    const overX = this.input.touchMode ? halfW * 0.65 : 0;
+    const overY = this.input.touchMode ? halfH * 0.35 : 0;
+    tx = v.map.pxW < halfW * 2 - overX * 2 ? v.map.pxW / 2 : clamp(tx, halfW - overX, v.map.pxW - halfW + overX);
+    ty = v.map.pxH < halfH * 2 - overY * 2
+      ? v.map.pxH / 2
+      : clamp(ty, halfH - overY, v.map.pxH - halfH + overY + (v.def.openBottom ? 200 : 0));
     const ck = Math.min(1, dt * 10);
     if (Math.hypot(tx - this.cam.x, ty - this.cam.y) > 900) {
       this.cam.x = tx;
@@ -1049,7 +1058,8 @@ export class Renderer {
     // Лента событий (на телефоне — только 3 последних, под кнопками оружия)
     ctx.textAlign = 'right';
     ctx.font = `600 ${small ? 10 : 13}px system-ui, sans-serif`;
-    let fy = touch ? 120 : small ? 70 : 30;
+    const weaponBtns = this.input.buttons.filter((b) => b.key !== 'jump');
+    let fy = touch && weaponBtns.length ? Math.max(...weaponBtns.map((b) => b.y + b.r)) + 22 : small ? 70 : 30;
     const feed = small ? fx.feed.slice(-3) : fx.feed;
     for (const f of feed) {
       ctx.globalAlpha = Math.min(1, f.t);
@@ -1082,19 +1092,28 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
-    this.drawMinimap(v);
+    const miniBottom = this.drawMinimap(v);
+    // На тач-экране внизу пальцы — всё важное держим сверху.
+    const hudTopY = miniBottom + 24;
 
     if (me) {
       if (me.alive) {
         // Здоровье и броня
-        const bx = small ? 12 : 20;
-        const by = H - (small ? 22 : 30);
+        const bx = touch ? 12 : small ? 12 : 20;
+        const by = touch ? hudTopY : H - (small ? 22 : 30);
         ctx.textAlign = 'left';
-        ctx.font = `900 ${small ? 22 : 30}px system-ui, sans-serif`;
+        ctx.font = `900 ${touch ? 19 : small ? 22 : 30}px system-ui, sans-serif`;
         ctx.fillStyle = me.hp > 60 ? '#69db7c' : me.hp > 30 ? '#ffd43b' : '#ff922b';
-        ctx.fillText(`✚ ${Math.ceil(me.hp)}`, bx, by);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+        const hpText = `✚ ${Math.ceil(me.hp)}`;
+        ctx.strokeText(hpText, bx, by);
+        ctx.fillText(hpText, bx, by);
         ctx.fillStyle = '#74c0fc';
-        ctx.fillText(`⛨ ${Math.ceil(me.armor)}`, bx + (small ? 90 : 125), by);
+        const arText = `⛨ ${Math.ceil(me.armor)}`;
+        const ax2 = bx + (touch ? 74 : small ? 90 : 125);
+        ctx.strokeText(arText, ax2, by);
+        ctx.fillText(arText, ax2, by);
         // Активные усилители
         let px = bx;
         ctx.font = `700 ${small ? 11 : 13}px system-ui, sans-serif`;
@@ -1103,22 +1122,35 @@ export class Renderer {
           if (t <= 0) continue;
           ctx.fillStyle = pw.color;
           const label = `${pw.name} ${Math.ceil(t)}`;
-          ctx.fillText(label, px, by - (small ? 30 : 40));
+          ctx.fillText(label, px, touch ? by + 20 : by - (small ? 30 : 40));
           px += ctx.measureText(label).width + 14;
         }
 
         // Оружие и патроны
         const wd = WEAPONS[me.weapon];
         const ammo = me.ammo[me.weapon];
-        ctx.textAlign = 'right';
-        ctx.font = `900 ${small ? 20 : 28}px system-ui, sans-serif`;
-        ctx.fillStyle = wd.color;
-        // На тач-экране справа внизу живёт стик прицела — сдвигаем патроны к центру.
-        const ax = touch ? W * 0.62 : W - 20;
-        ctx.fillText(ammo < 0 ? '∞' : String(ammo), ax, by);
-        ctx.font = `700 ${small ? 12 : 15}px system-ui, sans-serif`;
-        ctx.fillStyle = '#e9ecef';
-        ctx.fillText(wd.name, ax, by - (small ? 24 : 32));
+        const ammoText = ammo < 0 ? '∞' : String(ammo);
+        const prev = this.input.buttons.find((b) => b.key === 'prev');
+        const next = this.input.buttons.find((b) => b.key === 'next');
+        if (touch && prev && next) {
+          // Между кнопками ◀ ▶ в правом верхнем углу.
+          const cx = (prev.x + next.x) / 2;
+          ctx.textAlign = 'center';
+          ctx.font = '700 11px system-ui, sans-serif';
+          ctx.fillStyle = '#e9ecef';
+          ctx.fillText(wd.name, cx, prev.y - 4);
+          ctx.font = '900 17px system-ui, sans-serif';
+          ctx.fillStyle = wd.color;
+          ctx.fillText(ammoText, cx, prev.y + 15);
+        } else {
+          ctx.textAlign = 'right';
+          ctx.font = `900 ${small ? 20 : 28}px system-ui, sans-serif`;
+          ctx.fillStyle = wd.color;
+          ctx.fillText(ammoText, W - 20, by);
+          ctx.font = `700 ${small ? 12 : 15}px system-ui, sans-serif`;
+          ctx.fillStyle = '#e9ecef';
+          ctx.fillText(wd.name, W - 20, by - (small ? 24 : 32));
+        }
 
         // Полоса оружия
         if (!small && !touch) {
@@ -1193,11 +1225,12 @@ export class Renderer {
       ctx.textAlign = 'left';
       ctx.font = '600 11px system-ui, sans-serif';
       ctx.fillStyle = v.ping < 80 ? '#69db7c' : v.ping < 160 ? '#ffd43b' : '#ff922b';
-      ctx.fillText(`пинг ${Math.round(v.ping)} мс`, small ? 64 : 12, small ? H - 8 : 140);
+      ctx.fillText(`пинг ${Math.round(v.ping)} мс`, touch ? 12 : small ? 64 : 12, touch ? hudTopY + 40 : small ? H - 8 : 140);
     }
   }
 
-  private drawMinimap(v: View) {
+  /** Рисует мини-карту, возвращает её нижнюю границу на экране. */
+  private drawMinimap(v: View): number {
     const ctx = this.ctx;
     const small = this.w < 700 || this.h < 500;
     const s = small ? 1.1 : 2;
@@ -1233,36 +1266,64 @@ export class Renderer {
       ctx.arc(x0 + (p.rx / TILE) * s, y0 + (p.ry / TILE) * s, r, 0, Math.PI * 2);
       ctx.fill();
     }
+    return y0 + mh + 3;
   }
 
   private drawTouch() {
     const ctx = this.ctx;
     const inp = this.input;
-    for (const st of [inp.left, inp.right]) {
-      if (!st) continue;
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(st.ox, st.oy, 60, 0, Math.PI * 2);
-      ctx.stroke();
+    const R = inp.stickR;
+    const knob = R * 0.45;
+    const sticks: [typeof inp.left, { x: number; y: number }, string, string][] = [
+      [inp.left, inp.homeL, '◀  ▶', 'вверх — прыжок'],
+      [inp.right, inp.homeR, '◎', 'прицел · огонь'],
+    ];
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const [st, home, icon, hint] of sticks) {
+      if (!st) {
+        // Подсказка на месте стика: сюда ставить палец.
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(home.x, home.y, R, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(home.x, home.y, knob, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.font = `700 ${Math.round(knob * 0.7)}px system-ui, sans-serif`;
+        ctx.fillText(icon, home.x, home.y + 1);
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillText(hint, home.x, home.y - R - 10);
+        continue;
+      }
       const v = inp.stickVec(st);
       const l = Math.min(1, v.len);
       const ang = Math.atan2(v.y, v.x);
-      ctx.fillStyle = st === inp.right && v.len > 0.55 ? 'rgba(255,146,43,0.6)' : 'rgba(255,255,255,0.35)';
+      const firing = st === inp.right && v.len > 0.5;
+      const jumping = st === inp.left && v.y < -0.55 && v.len > 0.5;
+      ctx.strokeStyle = firing ? 'rgba(255,146,43,0.55)' : 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(st.ox + Math.cos(ang) * l * 60, st.oy + Math.sin(ang) * l * 60, 26, 0, Math.PI * 2);
+      ctx.arc(st.ox, st.oy, R, 0, Math.PI * 2);
+      ctx.stroke();
+      // Порог стрельбы — внутреннее кольцо.
+      if (st === inp.right) {
+        ctx.strokeStyle = 'rgba(255,146,43,0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(st.ox, st.oy, R * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = firing ? 'rgba(255,146,43,0.65)' : jumping ? 'rgba(99,230,190,0.6)' : 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(st.ox + Math.cos(ang) * l * R, st.oy + Math.sin(ang) * l * R, knob, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (!inp.left) {
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.font = '600 13px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('← движение →', this.w * 0.2, this.h - 40);
-    }
-    if (!inp.right) {
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.fillText('прицел / огонь', this.w * 0.72, this.h - 40);
-    }
+    ctx.textBaseline = 'alphabetic';
     for (const b of inp.buttons) {
       ctx.fillStyle = b.down ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)';
       ctx.beginPath();

@@ -257,6 +257,11 @@ export class GameEngine {
   private handleEvent(e: GameEvent, players: Map<number, Player>, map: World['map']) {
     this.fx.handle(e, players, this.localId, map);
     if (e.k === 'tile' || e.k === 'crack') this.renderer.redrawTile(map, e.i);
+    // Тактильный отклик на телефоне: по нам попали / мы выбили соперника.
+    if (this.input.touchMode && navigator.vibrate) {
+      if (e.k === 'hit' && e.p === this.localId) navigator.vibrate(Math.min(60, 15 + e.d));
+      else if (e.k === 'kill' && e.a === this.localId && e.v !== this.localId) navigator.vibrate([20, 40, 30]);
+    }
     if (e.k === 'end' || e.k === 'kill') this.pushUi(true);
   }
 
@@ -294,7 +299,43 @@ export class GameEngine {
       }
       if (slot !== null && owned[slot] !== undefined) this.wantWeapon = owned[slot];
     }
-    return { seq: ++this.seq, mx: r.mx, jump: r.jump, down: r.down, fire: r.fire, aim: r.aim, w: this.wantWeapon };
+    const aim = r.touchAiming && me?.alive ? this.aimAssist(me, r.aim) : r.aim;
+    return { seq: ++this.seq, mx: r.mx, jump: r.jump, down: r.down, fire: r.fire, aim, w: this.wantWeapon };
+  }
+
+  /**
+   * Мягкий автоприцел для сенсорного управления: если в узком конусе вокруг
+   * направления пальца есть видимый противник, прицел подтягивается к нему.
+   * Чем ближе цель, тем шире конус. Мышь не трогаем.
+   */
+  private aimAssist(me: Player, aim: number): number {
+    const players = this.world ? this.world.players : this.client?.players;
+    const map = this.world ? this.world.map : this.client?.map;
+    const mode = this.world ? this.world.settings.mode : this.client?.settings.mode;
+    if (!players || !map) return aim;
+    const sx = me.x;
+    const sy = me.y - 6;
+    let best = 0;
+    let bestScore = Infinity;
+    for (const p of players.values()) {
+      if (p === me || !p.alive || (mode === 'tdm' && p.team === me.team)) continue;
+      const px = p.rx || p.x;
+      const py = (p.ry || p.y) - 4;
+      const d = Math.hypot(px - sx, py - sy);
+      if (d > 1000 || d < 1) continue;
+      let da = Math.atan2(py - sy, px - sx) - aim;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      const tol = Math.min(0.45, 0.22 + 40 / d);
+      if (Math.abs(da) > tol) continue;
+      if (!map.lineOfSight(sx, sy, px, py)) continue;
+      const score = Math.abs(da) + d / 4000;
+      if (score < bestScore) {
+        bestScore = score;
+        best = da;
+      }
+    }
+    return bestScore < Infinity ? aim + best * 0.75 : aim;
   }
 
   private fixedStep() {

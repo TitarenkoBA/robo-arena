@@ -103,9 +103,13 @@ import { SfxService } from '../services/sfx.service';
     <div class="overlay rotate" [class.show]="!rotateDismissed()">
       <div class="card max-w-xs text-center">
         <p class="text-5xl">📱↻</p>
-        <p class="mt-2 font-bold">Поверните телефон горизонтально</p>
-        <p class="mt-1 text-sm text-white/60">Так удобнее управлять двумя стиками.</p>
-        <button type="button" class="btn small mt-3" (click)="rotateDismissed.set(true)">Играть так</button>
+        <p class="mt-2 font-bold">Играть удобнее горизонтально</p>
+        <p class="mt-1 text-sm text-white/60">Два стика под большими пальцами, а робот — посередине экрана.</p>
+        <button type="button" class="btn btn-primary mt-3 w-full" (click)="rotateNow()">↻ Повернуть экран</button>
+        @if (rotateFailed()) {
+          <p class="mt-2 text-xs text-orange-300">Браузер не даёт повернуть экран сам — поверните телефон (и проверьте, что автоповорот включён).</p>
+        }
+        <button type="button" class="btn small mt-2" (click)="rotateDismissed.set(true)">Играть вертикально</button>
       </div>
     </div>
   `,
@@ -150,25 +154,47 @@ export class GameComponent implements AfterViewInit, OnDestroy {
       onUi: (s) => this.ui.set(s),
       onMenu: () => this.toggleMenu(),
     });
+    if (this.role === 'offline') this.engine.paused = this.menu() || (this.portrait() && !this.rotateDismissed());
     // Отладочный доступ к движку из консоли (только в dev-сборке).
     if (isDevMode()) Object.assign(window, { __robo: this.engine, __lan: this.lan });
   }
 
   ngOnDestroy() {
+    window.removeEventListener('resize', this.onOrientation);
     this.engine?.destroy();
     this.engine = null;
+    // Меню снова вертикальное.
+    void this.pwa.exitGameMode();
   }
 
   unlock() {
     this.sfx.unlock();
+    // Первое касание — жест пользователя: можно включить полный экран и альбомную ориентацию.
+    if (this.pwa.isTouch && !this.rotateDismissed() && (this.pwa.isPortrait() || (!document.fullscreenElement && !this.pwa.isStandalone))) {
+      void this.pwa.enterGameMode();
+    }
   }
 
+  protected readonly rotateFailed = signal(false);
+
+  async rotateNow() {
+    this.sfx.unlock();
+    const ok = await this.pwa.enterGameMode();
+    // Если поворот не удался (iOS), подсказка остаётся с пояснением.
+    setTimeout(() => this.rotateFailed.set(!ok && this.pwa.isPortrait()), 400);
+  }
+
+  /** Экран сейчас вертикальный (на телефоне — показываем подсказку повернуть). */
+  private readonly portrait = signal(this.pwa.isTouch && this.pwa.isPortrait());
+  private readonly onOrientation = () => this.portrait.set(this.pwa.isTouch && this.pwa.isPortrait());
+
   constructor() {
-    // В одиночной игре открытое меню ставит паузу.
+    // В одиночной игре пауза, пока открыто меню или висит подсказка повернуть телефон.
     effect(() => {
-      const open = this.menu();
-      if (this.engine && this.role === 'offline') this.engine.paused = open;
+      const blocked = this.menu() || (this.portrait() && !this.rotateDismissed());
+      if (this.engine && this.role === 'offline') this.engine.paused = blocked;
     });
+    window.addEventListener('resize', this.onOrientation);
   }
 
   toggleMenu() {
@@ -180,7 +206,6 @@ export class GameComponent implements AfterViewInit, OnDestroy {
     this.engine?.destroy();
     this.engine = null;
     this.transport.disconnect(false);
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     void this.router.navigate(['/']);
   }
 }

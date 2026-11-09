@@ -16,10 +16,20 @@ export interface TouchButton {
   id: number;
 }
 
-const STICK_R = 60;
+/** Доля ширины экрана у каждого края, где можно «взять» стик. Центр остаётся для обзора. */
+const ZONE = 0.38;
+/** Верхняя часть экрана — HUD и кнопки, стики там не создаются. */
+const ZONE_TOP = 0.28;
 
 /** Клавиатура, мышь и сенсорное управление. */
 export class InputManager {
+  /** Радиус стика (зависит от размера экрана). */
+  stickR = 60;
+  /** Места «по умолчанию» для стиков — там рисуются подсказки. */
+  homeL = { x: 0, y: 0 };
+  homeR = { x: 0, y: 0 };
+  /** Прыжок левым стиком с гистерезисом: повторное отклонение вверх — двойной прыжок. */
+  private stickJump = false;
   private keys = new Set<string>();
   mouseX = 0;
   mouseY = 0;
@@ -80,12 +90,19 @@ export class InputManager {
   }
 
   layout(w: number, h: number) {
-    const s = Math.min(1.2, Math.max(0.8, h / 420));
+    const s = Math.min(1.25, Math.max(0.8, Math.min(w, h) / 420));
+    this.stickR = 56 * s;
+    const R = this.stickR;
+    this.homeL = { x: R + 34 * s, y: h - R - 28 * s };
+    this.homeR = { x: w - R - 34 * s, y: h - R - 28 * s };
+    // В вертикальном режиме экран узкий — кнопки оружия на строку ниже, чтобы не наезжать на таймер.
+    const wy = w < h ? 96 * s : 34 * s;
     const prevDown = new Map(this.buttons.map((b) => [b.key, b]));
     this.buttons = [
-      { key: 'jump', x: w - 78 * s, y: h - 190 * s, r: 38 * s, label: '⤒', down: false, id: -1 },
-      { key: 'next', x: w - 60 * s, y: 70 * s, r: 28 * s, label: '▶', down: false, id: -1 },
-      { key: 'prev', x: w - 132 * s, y: 70 * s, r: 28 * s, label: '◀', down: false, id: -1 },
+      // Запасная кнопка прыжка — над правым стиком (основной прыжок: левый стик вверх).
+      { key: 'jump', x: this.homeR.x, y: this.homeR.y - R - 52 * s, r: 30 * s, label: '⤒', down: false, id: -1 },
+      { key: 'next', x: w - 34 * s, y: wy, r: 24 * s, label: '▶', down: false, id: -1 },
+      { key: 'prev', x: w - 176 * s, y: wy, r: 24 * s, label: '◀', down: false, id: -1 },
     ];
     for (const b of this.buttons) {
       const old = prevDown.get(b.key);
@@ -119,11 +136,13 @@ export class InputManager {
     this.touchMode = true;
     const rect = this.el.getBoundingClientRect();
     const w = rect.width;
+    const h = rect.height;
+    const R = this.stickR;
     for (const t of Array.from(e.changedTouches)) {
       const x = t.clientX - rect.left;
       const y = t.clientY - rect.top;
       if (phase === 'start') {
-        const btn = this.buttons.find((b) => Math.hypot(b.x - x, b.y - y) < b.r * 1.25);
+        const btn = this.buttons.find((b) => Math.hypot(b.x - x, b.y - y) < b.r * 1.3);
         if (btn) {
           btn.down = true;
           btn.id = t.identifier;
@@ -131,21 +150,26 @@ export class InputManager {
           if (btn.key === 'prev') this.weaponDelta--;
           continue;
         }
-        if (x < w * 0.5 && !this.left) this.left = { id: t.identifier, ox: x, oy: y, x, y };
-        else if (x >= w * 0.5 && !this.right) this.right = { id: t.identifier, ox: x, oy: y, x, y };
+        // Стики — только у краёв и не в верхней полосе: палец не закрывает робота в центре.
+        if (y < h * ZONE_TOP) continue;
+        if (x < w * ZONE && !this.left) this.left = { id: t.identifier, ox: x, oy: y, x, y };
+        else if (x > w * (1 - ZONE) && !this.right) this.right = { id: t.identifier, ox: x, oy: y, x, y };
       } else if (phase === 'move') {
         for (const s of [this.left, this.right]) {
           if (s && s.id === t.identifier) {
             s.x = x;
             s.y = y;
-            // «Плавающий» центр стика догоняет палец при большом отклонении.
+            // «Плавающий» центр стика догоняет палец при большом отклонении,
+            // но не выезжает из своей зоны к центру экрана.
             const dx = s.x - s.ox;
             const dy = s.y - s.oy;
             const d = Math.hypot(dx, dy);
-            if (d > STICK_R * 1.6) {
-              s.ox = s.x - (dx / d) * STICK_R * 1.6;
-              s.oy = s.y - (dy / d) * STICK_R * 1.6;
+            if (d > R * 1.5) {
+              s.ox = s.x - (dx / d) * R * 1.5;
+              s.oy = s.y - (dy / d) * R * 1.5;
             }
+            if (s === this.left) s.ox = Math.min(s.ox, w * ZONE);
+            else s.ox = Math.max(s.ox, w * (1 - ZONE));
           }
         }
       } else {
@@ -161,9 +185,9 @@ export class InputManager {
 
   stickVec(s: Stick | null) {
     if (!s) return { x: 0, y: 0, len: 0 };
-    const dx = (s.x - s.ox) / STICK_R;
-    const dy = (s.y - s.oy) / STICK_R;
-    const len = Math.min(1.6, Math.hypot(dx, dy));
+    const dx = (s.x - s.ox) / this.stickR;
+    const dy = (s.y - s.oy) / this.stickR;
+    const len = Math.min(1.5, Math.hypot(dx, dy));
     return { x: dx, y: dy, len };
   }
 
@@ -175,22 +199,28 @@ export class InputManager {
     let down = k.has('KeyS') || k.has('ArrowDown');
     let fire = this.mouseDown || k.has('KeyF') || k.has('ControlLeft');
     let aim = aimFromMouse;
+    /** Прицел задан пальцем — движок может помочь автоприцелом. */
+    let touchAiming = false;
 
     if (this.touchMode) {
       const l = this.stickVec(this.left);
-      if (l.len > 0.2) mx = Math.abs(l.x) > 0.25 ? Math.max(-1, Math.min(1, l.x * 1.4)) : 0;
-      if (l.y < -0.65) jump = true;
-      if (l.y > 0.7) down = true;
+      if (Math.abs(l.x) > 0.18) mx = Math.max(-1, Math.min(1, l.x * 1.5));
+      // Прыжок: стик вверх. Чтобы сделать двойной — чуть отпустить и снова вверх.
+      if (l.y < -0.55 && l.len > 0.5) this.stickJump = true;
+      else if (l.y > -0.3) this.stickJump = false;
+      if (this.stickJump) jump = true;
+      if (l.y > 0.65 && Math.abs(l.x) < 0.6) down = true;
       if (this.buttons.find((b) => b.key === 'jump')?.down) jump = true;
       const r = this.stickVec(this.right);
       if (r.len > 0.25) {
         this.touchAim = Math.atan2(r.y, r.x);
         this.hasTouchAim = true;
+        touchAiming = true;
       }
       if (this.hasTouchAim) aim = this.touchAim;
-      if (r.len > 0.55) fire = true;
+      if (r.len > 0.5) fire = true;
     }
-    return { mx, jump, down, fire, aim };
+    return { mx, jump, down, fire, aim, touchAiming };
   }
 
   takeWeaponDelta() {
