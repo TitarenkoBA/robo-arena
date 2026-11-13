@@ -3,6 +3,7 @@
   "short_name": "Робо-Арена",
   "description": "Динамичная 2D-арена роботов: P2P-игра по QR-коду, боты, разрушаемость, 27 видов оружия.",
   "lang": "ru",
+  "id": "/robo-arena/",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
